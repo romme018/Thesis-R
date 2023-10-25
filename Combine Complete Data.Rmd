@@ -114,4 +114,10 @@ endOS<-endOS%>%filter(Species=="Natans 1")
 endOS$Bag_Number<-as.numeric(endOS$Bag_Number)
 ```
 
+```{r Connecting Project to Github}
+
+library(usethis)
+use_github()
+
+```
 
