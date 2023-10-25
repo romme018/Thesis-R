@@ -1,0 +1,117 @@
+---
+title: "Combine Complete Data"
+author: "Kaitlin Rommelfanger"
+date: "2023-10-21"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r Clean Start}
+library(tidyverse)
+library(plyr)
+ 
+
+#importing my data
+start<-read.csv("Data/10.21/Bags Start.csv")
+end<-read.csv("Data/10.21/Bags End.csv")
+
+#check things for filtering
+unique(start$Species)
+unique(start$Shore_or_Water)
+#there is an extra row read in that has no data going to remove it
+start<-start[-151,]
+
+#check end df for errors
+unique(end$Species)
+unique(end$Shore_or_Water)
+
+# calculate the mass of the bag, and then subtract the bag mass to get final dried mass
+cleanstart<-start%>%
+  mutate(BagMass=(SargKeptPlusBag-Sarg_Kept))%>%
+  mutate(InitialDriedMass=(SargKeptBagDried-BagMass))%>%
+  select(Tag_Number, Bag_Number, Shore_or_Water, Species, Sarg_Kept, InitialDriedMass, Sarg_LitterBag)
+
+```
+
+```{r Clean End}
+#now I am going to determine my end masses 
+end<-end%>%
+  mutate(EBagMass=(MassPlusBag-End_Mass))
+
+#there is an error in mass+bag in N813Shore and N814Shore so I am going to change the bag mass to the average bag mass for that day for that data point 
+
+avgbag<-end%>%filter(Date.Collected=="8/16/23")
+
+#removing the two rows with the error
+avgbag<-avgbag[-2,]
+avgbag<-avgbag[-3,]
+
+#taking the average of the remainder
+mean(avgbag$EBagMass)
+#average bag mass is 2.343143
+
+#now I am going to replace the values in end df, E bag mass with the average (the two values are 5.346, -0.583)
+
+end[2,13] <- 2.343
+end[4,13]<-2.343
+
+#now i can get back to calculating masses (all fixed!), selected for columns I want in dataframe to analyze
+
+cleanend<-end%>%
+  mutate(FinalDriedMass=(MassPlusBagDried-EBagMass))%>%
+  select( Week_Collected, Tag.Number, Bag_Number, Shore_or_Water, Species, End_Mass, FinalDriedMass)
+
+#make a unique ID column to merge the two dataframes on(start and end)
+cleanstart$ID = paste(cleanstart$Bag_Number,cleanstart$Shore_or_Water, sep= " ")
+cleanstart$ID = paste(cleanstart$ID,cleanstart$Species, sep= " ")
+
+cleanend$ID = paste(cleanend$Bag_Number,cleanend$Shore_or_Water, sep= " ")
+cleanend$ID = paste(cleanend$ID,cleanend$Species, sep= " ")
+
+#filter start df so I only have the starting masses and ID, to make the merge less hectic
+startmerge<-cleanstart%>%
+  select(ID, Sarg_LitterBag)
+
+#merge to have starting and ending masses in one dataframe (have a total of 113 samples with initial and final masses these are the ones that I should make sure to get initial stuff on)
+end1 <- merge(cleanend, startmerge, by = "ID", all.x = TRUE)
+end1<-end1%>%na.omit()
+
+
+
+```
+
+```{r}
+#now Im filtering  to determine which ones are missing 
+
+#first fluitans shore
+endFS<-end1%>%filter(Shore_or_Water=="Shore")
+endFS<-endFW%>%filter(Species=="Fluitans")
+endFS$Bag_Number<-as.numeric(endFS$Bag_Number)
+
+# fluitans water
+endFW<-end1%>%filter(Shore_or_Water=="Water")
+endFW<-endFW%>%filter(Species=="Fluitans")
+endFW$Bag_Number<-as.numeric(endFW$Bag_Number)
+
+#natans 8 water
+endEW<-end1%>%filter(Shore_or_Water=="Water")
+endEW<-endEW%>%filter(Species=="Natans 8")
+endEW$Bag_Number<-as.numeric(endEW$Bag_Number)
+
+#natans 8 shore
+endES<-end1%>%filter(Shore_or_Water=="Shore")
+endES<-endES%>%filter(Species=="Natans 8")
+endES$Bag_Number<-as.numeric(endES$Bag_Number)
+
+#natans 1 water
+endOW<-end1%>%filter(Shore_or_Water=="Water")
+endOW<-endOW%>%filter(Species=="Natans 1")
+endOW$Bag_Number<-as.numeric(endOW$Bag_Number)
+
+#natans 1 shore 
+endOS<-end1%>%filter(Shore_or_Water=="Shore")
+endOS<-endOS%>%filter(Species=="Natans 1")
+endOS$Bag_Number<-as.numeric(endOS$Bag_Number)
+```
+
+

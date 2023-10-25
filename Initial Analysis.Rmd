@@ -1,0 +1,163 @@
+---
+title: "Initial Analysis"
+output: html_document
+date: "2023-09-12"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r Clean Start}
+library(tidyverse)
+library(plyr)
+library(rcompanion)#for srh
+library(FSA)#for dunn test 
+
+#importing my data
+start<-read.csv("Data/9.12/9.12Start.csv")
+end<-read.csv("Data/9.12/9.12End.csv")
+
+#remove NA's (because there is some data points that I don't have dried masses for yet), calculate the mass of the bag, and then subtract the bag mass to get final dried mass
+start<-start%>%
+  mutate(BagMass=(SargKeptPlusBag-Sarg_Kept))%>%
+  mutate(InitialDriedMass=(SargKeptBagDried-BagMass))%>%
+  select(Tag_Number, Bag_Number, Shore_or_Water, Species, Sarg_Kept, InitialDriedMass, Sarg_LitterBag)
+
+```
+
+```{r Clean End}
+#now I am going to filter my end masses 
+end<-end%>%na.omit()%>%
+  mutate(EBagMass=(MassPlusBag-End_Mass))
+
+#there is an error in mass+bag in N813Shore and N814Shore so I am going to change the bag mass to the average bag mass for that day for that data point 
+
+avgbag<-end%>%filter(Date.Collected=="8/16/23")
+
+#removing the two rows with the error
+avgbag<-avgbag[-2,]
+avgbag<-avgbag[-3,]
+
+#taking the average of the remainder
+mean(avgbag$EBagMass)
+#average bag mass is 2.343143
+
+#now I am going to replace the values in end df, E bag mass with the average (the two values are 5.346, -0.583)
+
+end[2,10] <- 2.343
+end[4,10]<-2.343
+
+#now i can get back to calculating masses (all fixed!), selected for columns I want in dataframe to analyze
+
+end<-end%>%
+  mutate(FinalDriedMass=(MassPlusBagDried-EBagMass))%>%
+  select( Week_Collected, Tag.Number, Bag_Number, Shore_or_Water, Species, End_Mass, FinalDriedMass)
+
+#make a unique ID column to merge the two dataframes on(start and end)
+start$ID = paste(start$Bag_Number,start$Shore_or_Water, sep= " ")
+start$ID = paste(start$ID,start$Species, sep= " ")
+
+end$ID = paste(end$Bag_Number,end$Shore_or_Water, sep= " ")
+end$ID = paste(end$ID,end$Species, sep= " ")
+
+#filter start df so I only have the starting masses and ID, to make the merge less hectic
+startmerge<-start%>%
+  select(ID, Sarg_LitterBag)
+
+#merge to have starting and ending masses in one dataframe
+end1 <- merge(end, startmerge, by = "ID", all.x = TRUE)
+end1<-end1%>%na.omit()
+```
+
+```{r analyze data}
+#determine the change in mass at different stages
+end1<-end1%>%
+  mutate(ChangeWetMass=Sarg_LitterBag-End_Mass)%>%
+  mutate(EndWetDryChange=End_Mass-FinalDriedMass)%>%
+  mutate(TotalMassChange=Sarg_LitterBag-FinalDriedMass)
+
+endF<-end1%>%
+  filter(Species=="Fluitans")
+
+endN8<-end1%>%
+  filter(Species=="Natans 8")
+
+endN1<-end1%>%
+  filter(Species=="Natans 1")
+
+#summary of data
+
+ end1$Shore_or_Water<-as.factor(end1$Shore_or_Water)
+ end1$Species<-as.factor(end1$Species)
+
+ 
+
+endsummary <-end1%>%ddply( ~Shore_or_Water*Species, summarise,
+                          mean = mean(TotalMassChange),
+                          sd = sd(TotalMassChange),
+                          n = length(TotalMassChange),
+                          SEM = sd(TotalMassChange)/sqrt(length(TotalMassChange)))
+
+View(endsummary)
+
+#plot summary data
+
+endPlot <- endsummary%>%ggplot(aes(x =Species, y = mean, fill = Shore_or_Water)) + 
+  geom_bar(stat="identity", position = position_dodge()) + 
+  geom_errorbar(aes(ymin = mean - SEM,ymax = mean + SEM), position = position_dodge(width = 0.9), width = 0.25) + 
+  ylab("Change in Mass (g) (mean +/- SEM)") + xlab("Species") + scale_fill_discrete(name = "Shore or Water") +
+  ggtitle(" ")
+
+endPlot
+
+treatment_groups <- split(end1$TotalMassChange,list(end1$Shore_or_Water, end1$Species))
+View(treatment_groups)
+#run Bartlett
+
+endbartlett <- bartlett.test(treatment_groups)
+endbartlett
+#p-value = 0.01453 I do not have equal variance
+#going to log transform, square root, and square transformation
+
+end1$log=log(end1$TotalMassChange)
+treatment_groups1 <- split(end1$log,list(end1$Shore_or_Water, end1$Species))
+logendbartlett <- bartlett.test(treatment_groups1)
+logendbartlett
+#p-value =0.007937, nope
+
+
+#square transform
+end1$square=(end1$TotalMassChange)^2
+treatment_groups2 <- split(end1$square,list(end1$Shore_or_Water, end1$Species))
+squareendbartlett <- bartlett.test(treatment_groups2)
+squareendbartlett
+#p-value = 0.02483, nope
+
+#square root transform
+end1$root=sqrt(end1$TotalMassChange)
+treatment_groups3 <- split(end1$root,list(end1$Shore_or_Water, end1$Species))
+squarertendbartlett <- bartlett.test(treatment_groups3)
+squarertendbartlett
+# p-value = 0.01083, nope
+
+#nonparametric
+scheirerRayHare(TotalMassChange ~ Shore_or_Water + Species,
+                data = end1)
+
+#we have significant results 
+
+#DV:  TotalMassChange 
+#Observations:  40 
+#D:  1 
+#MS total:  136.6667 
+
+#                       Df  Sum Sq       H  p.value
+#Shore_or_Water          1  751.88  5.5016 0.018999
+#Species                 2 1377.65 10.0804 0.006472
+#Shore_or_Water:Species  2  663.06  4.8516 0.088405
+#Residuals              34 2509.53 
+
+
+write.csv(end1, file="endmass.csv")
+
+```
+

@@ -1,0 +1,71 @@
+---
+title: "Number of Replicates"
+output: html_document
+date: "2023-08-22"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(readr)
+library(tidyverse)
+
+#import csvs 
+metalstart <- read_csv("Data/10.21/Bags Start.csv")
+metalsend<-read_csv("Data/10.21/Bags End.csv")
+
+
+#reclassify as factors
+metalstart$Species<-as.factor(metalstart$Species)
+metalstart$Shore_or_Water<-as.factor(metalstart$Shore_or_Water)
+
+metalsend$Species<-as.factor(metalsend$Species)
+
+metalsend$Species<-as.character(metalsend$Species)
+metalsend$Week_Collected<-as.factor(metalsend$Week_Collected)
+metalsend$Shore_or_Water<-as.factor(metalsend$Shore_or_Water)
+
+
+#total number of replicates from each week 
+replicates<-metalsend%>%group_by(Week_Collected,Shore_or_Water, Species)%>%summarise(samples=length(unique(End_Mass)))
+
+View(replicates)
+
+group_split(replicates)
+
+
+#plot total number of replicates week one
+onerepplot<-replicates%>%
+  filter(Week_Collected=="One")%>%
+  ggplot()+
+  geom_col(aes(x=Species, y=samples, fill=Shore_or_Water), position = position_dodge(0.9))
+
+onerepplot
+
+#number of replicates week two 
+tworepplot<-replicates%>%
+  filter(Week_Collected=="Two")%>%
+  ggplot()+
+  geom_col(aes(x=Species, y=samples, fill=Shore_or_Water), position = position_dodge(0.9))
+
+tworepplot
+
+#number of replicates week three
+threerepplot<-replicates%>%
+  filter(Week_Collected=="Three")%>%
+  ggplot()+
+  geom_col(aes(x=Species, y=samples, fill=Shore_or_Water), position = position_dodge(0.9))
+
+threerepplot
+
+#determine bag mass and dried mass
+metalstart1<-metalstart%>%mutate(BagMass=SargKeptPlusBag-Sarg_Kept)
+View(metalstart1)
+
+metalstart1<-metalstart1%>%mutate(DrySargMass=SargKeptBagDried-BagMass)
+
+
+```
+
+
+
